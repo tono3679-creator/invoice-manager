@@ -1,7 +1,25 @@
 import { test as base, expect, type Page } from "@playwright/test";
 
 export { expect };
-export const test = base;
+
+// 公開環境に対して実行したときは、テストで作ったデモ会社を画面の「デモを終了する」で片付ける
+// （ローカルでは片付けない。失敗したときに画面を残して調べられるように）。全テストに自動で付く
+export const test = base.extend<{ cleanupDemo: void }>({
+  cleanupDemo: [async ({ page }, use) => {
+    await use();
+    if (!process.env.E2E_BASE_URL) return;
+    const menu = page.getByRole("button", { name: "ユーザーメニュー" }).first();
+    if (!(await menu.isVisible().catch(() => false))) return;
+    await menu.click();
+    const end = page.getByRole("menuitem", { name: "デモを終了する" });
+    if (await end.isVisible().catch(() => false)) {
+      await end.click();
+      await page.waitForURL(/\/login/).catch(() => {});
+    } else {
+      await page.keyboard.press("Escape");
+    }
+  }, { auto: true }],
+});
 
 export type Persona = "member" | "approver" | "admin" | "viewer";
 const PERSONA_BUTTON: Record<Exclude<Persona, "viewer">, RegExp> = {
@@ -32,11 +50,4 @@ export async function switchPersona(page: Page, persona: Persona) {
 /** 成功の通知が出るまで待つ */
 export async function expectToast(page: Page, text: string | RegExp) {
   await expect(page.locator('[data-sonner-toast][data-type="success"]').filter({ hasText: text }).first()).toBeVisible();
-}
-
-/** テストで作ったデモを片付ける（公開環境に対して実行したとき用） */
-export async function endDemoFromMenu(page: Page) {
-  await page.getByRole("button", { name: "ユーザーメニュー" }).first().click();
-  await page.getByRole("menuitem", { name: "デモを終了する" }).click();
-  await page.waitForURL(/\/(login)?$/);
 }
