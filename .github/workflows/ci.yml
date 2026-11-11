@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      LOCAL_DB: im
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/im
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/im
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - name: マイグレーション適用・見本データ投入
+        run: |
+          npm run db:local:reset
+          npm run db:seed
+      - run: npm test
+      - run: npm run build
+      - name: ブラウザでの E2E テスト（PC・スマートフォン）
+        run: |
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+        env:
+          E2E_COMMAND: npx next start -p 3100
+      - name: E2E の結果（失敗したときのスクリーンショット・トレース）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

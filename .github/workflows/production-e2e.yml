@@ -1,0 +1,58 @@
+name: 公開環境の E2E テスト
+
+# 公開したサイトに対して、ブラウザでの E2E テスト（PC・スマートフォン）を実行する。
+# Actions タブ → このワークフロー → Run workflow で、公開した URL を入力して実行する。
+# テストごとに「体験」から専用のデモ会社を作り、終わったら画面の「デモを終了する」で削除する（DB の接続情報は使わない）。
+# 1回の実行で 6 個ほどデモを作るため、同じ接続元からのデモ作成の上限（1時間に 30 回）に当たらないよう、続けて実行しない。
+# リポジトリの Secrets に E2E_LOGIN_PASSWORD（Vercel に設定した SEED_LOGIN_PASSWORD と同じ値）があれば、
+# 見本の会社へのメールアドレスとパスワードでのログインも確かめる（無ければそのテストは飛ばす）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 公開した URL（例：https://invoice-manager.vercel.app）
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-e2e
+  cancel-in-progress: false
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 入力した URL の確認
+        env:
+          INPUT_URL: ${{ inputs.base_url }}
+        run: |
+          if [[ ! "$INPUT_URL" =~ ^https://[A-Za-z0-9.-]+/?$ ]]; then
+            echo "::error::https:// で始まるサイトの URL（パスなし）を入力してください"
+            exit 1
+          fi
+          echo "E2E_BASE_URL=${INPUT_URL%/}" >> "$GITHUB_ENV"
+      - run: npx playwright install --with-deps chromium
+      - name: ブラウザでの E2E テスト（PC・スマートフォン）
+        run: npx playwright test
+        env:
+          E2E_LOGIN_PASSWORD: ${{ secrets.E2E_LOGIN_PASSWORD }}
+      - name: E2E の結果（スクリーンショット・トレース）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
