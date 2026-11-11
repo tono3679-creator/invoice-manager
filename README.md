@@ -43,7 +43,7 @@
 | DB | PostgreSQL（公開環境は Neon を想定）/ postgres.js |
 | PDF | pdf-lib / @pdf-lib/fontkit / IPAゴシック（IPA フォントライセンス。`assets/fonts`） |
 | テスト | Vitest（単体・DB）/ Playwright（E2E・スマートフォン幅） |
-| 公開 | Vercel（東京リージョン・Cron） |
+| 公開 | Vercel（シンガポール・Neon と同じ地域）・Cron |
 
 ## 設計のポイント
 
